@@ -12,7 +12,7 @@ entity control_unit is
              PC_Inc    : out STD_LOGIC;             
              A_Load    : out STD_LOGIC;
              B_Load    : out STD_LOGIC;             
-             ALU_Sel   : out STD_LOGIC_VECTOR (2 downto 0);             
+             ALU_Sel   : out STD_LOGIC_VECTOR (3 downto 0);             
              CCR_Result: in  STD_LOGIC_VECTOR (3 downto 0);
              CCR_Load  : out STD_LOGIC;             
              Bus1_Sel  : out STD_LOGIC_VECTOR (1 downto 0);                          
@@ -45,6 +45,11 @@ architecture control_unit_arch of control_unit is
   constant BVC      : std_logic_vector (7 downto 0) := x"26";   -- Branch if V=0  
   constant BCS      : std_logic_vector (7 downto 0) := x"27";   -- Branch if C=1
   constant BCC      : std_logic_vector (7 downto 0) := x"28";   -- Branch if C=0 
+  constant RLT	    : std_logic_vector (7 downto 0) := x"29";   -- Rotate A left
+  constant RRT	    : std_logic_vector (7 downto 0) := x"30";   -- Rotate A right
+  constant SHL	    : std_logic_vector (7 downto 0) := x"31";   -- Shift A left
+  constant SHR	    : std_logic_vector (7 downto 0) := x"32";   -- Shift A right
+  constant SBC_AB   : std_logic_vector (7 downto 0) := x"33";   -- Subtract with carry
 
 
   type state_type is (S_FETCH_0,              -- Opcode fetch states
@@ -94,6 +99,11 @@ architecture control_unit_arch of control_unit is
                       S_INC_B_4,
                       S_DEC_A_4,
                       S_DEC_B_4,
+	      	      S_ROL_A_4,
+		      S_ROR_A_4,
+		      S_SHL_A_4,
+		      S_SHR_A_4,
+		      S_SBC_AB_4,
 
 
                     
@@ -188,7 +198,10 @@ architecture control_unit_arch of control_unit is
             next_state <= S_ADD_AB_4; 
 
           elsif (IR = SUB_AB) then      -- Sub A and B
-            next_state <= S_SUB_AB_4;   
+            next_state <= S_SUB_AB_4; 
+
+          elsif (IR = SBC_AB) then      -- Sub A and B with carry in
+            next_state <= S_SBC_AB_4;  
 
           elsif (IR = AND_AB) then      -- Bitwise AND A and B
             next_state <= S_AND_AB_4;
@@ -206,20 +219,32 @@ architecture control_unit_arch of control_unit is
             next_state <= S_DEC_A_4;  
 
           elsif (IR = DECB) then      -- Decrement B
-            next_state <= S_DEC_B_4;            
+            next_state <= S_DEC_B_4; 
+
+          elsif (IR = RLT) then      -- ROtate Left A 
+            next_state <= S_ROL_A_4;
+
+          elsif (IR = RRT) then      -- ROtate Right A
+            next_state <= S_ROR_A_4;
+
+          elsif (IR = SHL) then      -- SHift Left A
+            next_state <= S_SHL_A_4;
+
+          elsif (IR = SHR) then      -- SHift Right A
+            next_state <= S_SHR_A_4;           
 
           elsif (IR = BRA) then         -- Branches
             next_state <= S_BRA_4;
 
 -- N
-          elsif (IR = BEQ and CCR_Result(3) = '1') then         -- BMI (We do jump) N=1
+          elsif (IR = BMI and CCR_Result(3) = '1') then         -- BMI (We do jump) N=1
             next_state <= S_BMI_4;
-          elsif (IR = BEQ and CCR_Result(3) = '0') then         -- BMI (We don't jump) N=0
+          elsif (IR = BMI and CCR_Result(3) = '0') then         -- BMI (We don't jump) N=0
             next_state <= S_BMI_7;
 
-          elsif (IR = BNE and CCR_Result(3) = '1') then         -- BPL (We don't jump) N=1
+          elsif (IR = BPL and CCR_Result(3) = '1') then         -- BPL (We don't jump) N=1
             next_state <= S_BPL_7;
-          elsif (IR = BNE and CCR_Result(3) = '0') then         -- BPL (We do jump) N=0
+          elsif (IR = BPL and CCR_Result(3) = '0') then         -- BPL (We do jump) N=0
             next_state <= S_BPL_4;
 -- Z
           elsif (IR = BEQ and CCR_Result(2) = '1') then         -- BEQ (We do jump) Z=1
@@ -232,24 +257,24 @@ architecture control_unit_arch of control_unit is
           elsif (IR = BNE and CCR_Result(2) = '0') then         -- BNE (We do jump) Z=0
             next_state <= S_BNE_4;
 -- V
-          elsif (IR = BEQ and CCR_Result(1) = '1') then         -- BVS (We do jump) N=1
+          elsif (IR = BVS and CCR_Result(1) = '1') then         -- BVS (We do jump) N=1
             next_state <= S_BVS_4;
-          elsif (IR = BEQ and CCR_Result(1) = '0') then         -- BVS (We don't jump) N=0
+          elsif (IR = BVS and CCR_Result(1) = '0') then         -- BVS (We don't jump) N=0
             next_state <= S_BVS_7;
 
-          elsif (IR = BNE and CCR_Result(1) = '1') then         -- BVC (We don't jump) V=1
+          elsif (IR = BVC and CCR_Result(1) = '1') then         -- BVC (We don't jump) V=1
             next_state <= S_BVC_7;
-          elsif (IR = BNE and CCR_Result(1) = '0') then         -- BVC (We do jump) V=0
+          elsif (IR = BVC and CCR_Result(1) = '0') then         -- BVC (We do jump) V=0
             next_state <= S_BVC_4; 
 -- C
-          elsif (IR = BEQ and CCR_Result(0) = '1') then         -- BCS (We do jump) C=1
+          elsif (IR = BCS and CCR_Result(0) = '1') then         -- BCS (We do jump) C=1
             next_state <= S_BCS_4;
-          elsif (IR = BEQ and CCR_Result(0) = '0') then         -- BCS (We don't jump) C=0
+          elsif (IR = BCS and CCR_Result(0) = '0') then         -- BCS (We don't jump) C=0
             next_state <= S_BCS_7;
 
-          elsif (IR = BNE and CCR_Result(0) = '1') then         -- BCC (We don't jump) C=1
+          elsif (IR = BCC and CCR_Result(0) = '1') then         -- BCC (We don't jump) C=1
             next_state <= S_BCC_7;
-          elsif (IR = BNE and CCR_Result(0) = '0') then         -- BCC (We do jump) C=0
+          elsif (IR = BCC and CCR_Result(0) = '0') then         -- BCC (We do jump) C=0
             next_state <= S_BCC_4; 
 
             
@@ -323,6 +348,9 @@ architecture control_unit_arch of control_unit is
       elsif (current_state = S_SUB_AB_4) then     -- Path for SUB_AB instruction
 	next_state <= S_FETCH_0;
 
+      elsif (current_state = S_SBC_AB_4) then     -- Path for SUB_AB instruction
+	next_state <= S_FETCH_0;
+
       elsif (current_state = S_AND_AB_4) then     -- Path for AND_AB instruction
 	next_state <= S_FETCH_0;
 
@@ -339,6 +367,18 @@ architecture control_unit_arch of control_unit is
 	next_state <= S_FETCH_0;
 
       elsif (current_state = S_DEC_B_4) then     -- Path for DECB instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_ROL_A_4) then     -- Path for ROL instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_ROR_A_4) then     -- Path for ROR instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_SHL_A_4) then     -- Path for SHL instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_SHR_A_4) then     -- Path for SHR instruction
 	next_state <= S_FETCH_0;
 -- N
       elsif (current_state = S_BMI_4) then     -- Path for BMI instruction (We do jump)
@@ -420,7 +460,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -433,7 +473,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -446,7 +486,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -459,7 +499,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -475,7 +515,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -488,7 +528,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -501,7 +541,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -517,7 +557,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -530,7 +570,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -543,7 +583,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -556,7 +596,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -569,7 +609,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -585,7 +625,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -597,7 +637,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -610,7 +650,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -623,7 +663,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -639,7 +679,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -651,7 +691,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -664,7 +704,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory  
@@ -679,7 +719,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -692,7 +732,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -705,7 +745,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '1';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -721,7 +761,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -734,7 +774,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -747,7 +787,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -760,7 +800,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -773,7 +813,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '1';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -789,7 +829,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -801,7 +841,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -814,7 +854,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -827,7 +867,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "10"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -844,7 +884,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -859,7 +899,22 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "001";                 
+           ALU_Sel  <= "0001";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- SBC_AB
+      -------------------------------------------------------------------------------------------------- 
+        when S_SBC_AB_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1100";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -874,7 +929,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "010";                 
+           ALU_Sel  <= "0010";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -889,7 +944,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "011";                 
+           ALU_Sel  <= "0011";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -904,7 +959,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "100";                 
+           ALU_Sel  <= "0100";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -919,7 +974,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '1';                 
-           ALU_Sel  <= "101";                 
+           ALU_Sel  <= "0101";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "10"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -934,7 +989,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '1';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "110";                 
+           ALU_Sel  <= "0110";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
@@ -949,9 +1004,69 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '1';                 
-           ALU_Sel  <= "111";                 
+           ALU_Sel  <= "0111";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "10"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- ROL
+      -------------------------------------------------------------------------------------------------- 
+        when S_ROL_A_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1000";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- ROR
+      -------------------------------------------------------------------------------------------------- 
+        when S_ROR_A_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1001";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- SHL
+      -------------------------------------------------------------------------------------------------- 
+        when S_SHL_A_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1010";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- SHR
+      -------------------------------------------------------------------------------------------------- 
+        when S_SHR_A_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1011";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
 
       --------------------------------------------------------------------------------------------------
@@ -964,7 +1079,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -977,7 +1092,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -990,7 +1105,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1003,7 +1118,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1020,7 +1135,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1033,7 +1148,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1046,7 +1161,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1059,7 +1174,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1076,7 +1191,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1089,7 +1204,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1102,7 +1217,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1115,7 +1230,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1132,7 +1247,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1145,7 +1260,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1158,7 +1273,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1171,7 +1286,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1187,7 +1302,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1200,7 +1315,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1213,7 +1328,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1226,7 +1341,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1242,7 +1357,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1255,7 +1370,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1268,7 +1383,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1281,7 +1396,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1297,7 +1412,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1310,7 +1425,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1323,7 +1438,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1336,7 +1451,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1352,7 +1467,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "01"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1365,7 +1480,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1378,7 +1493,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "10"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1391,7 +1506,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '1';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory
@@ -1409,7 +1524,7 @@ architecture control_unit_arch of control_unit is
            PC_Inc   <= '0';                     
            A_Load   <= '0';            
            B_Load   <= '0';                 
-           ALU_Sel  <= "000";                 
+           ALU_Sel  <= "0000";                 
            CCR_Load <= '0';                      
            Bus1_Sel <= "00"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory

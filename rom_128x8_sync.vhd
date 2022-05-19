@@ -35,22 +35,128 @@ architecture rom_128x8_sync_arch of rom_128x8_sync is
   constant BVC      : std_logic_vector (7 downto 0) := x"26";   -- Branch if V=0  
   constant BCS      : std_logic_vector (7 downto 0) := x"27";   -- Branch if C=1
   constant BCC      : std_logic_vector (7 downto 0) := x"28";   -- Branch if C=0  
+  constant RLT	    : std_logic_vector (7 downto 0) := x"29";   -- Rotate A left
+  constant RRT	    : std_logic_vector (7 downto 0) := x"30";   -- Rotate A right
+  constant SHL	    : std_logic_vector (7 downto 0) := x"31";   -- Shift A left
+  constant SHR	    : std_logic_vector (7 downto 0) := x"32";   -- Shift A right
+  constant SBC_AB   : std_logic_vector (7 downto 0) := x"33";   -- Subtract with carry
 
   type rom_type is array (0 to 127) of std_logic_vector(7 downto 0);
 
--- Example program: 
-  constant ROM : rom_type := (0      => LDB_IMM,
-                              1      => x"01",   --Load 0x01 into B
-                              2      => LDA_IMM,
-                              3      => x"02",   --Load x02 into A 
-			      4      => STA_DIR,
-                              5      => x"E0",	      
-			      6      => SUB_AB, 
-                              7      => BNE,    --If we're not at 0, jump to storing A
-                              8      => x"04",   
-			      9      => BRA,    --otherwise jump to setting A
-                              10     => x"02",
-                              others => x"00"); 
+-- value 0x80
+-- mod 0x81
+-- divisor 0x82
+-- counter 0x83
+
+  constant ROM : rom_type := (  -- Initial values - 200 / 10. 
+				0	=> LDA_IMM,
+				1	=> x"AB", 	-- Numerator
+				2	=> STA_DIR,
+				3	=> x"80",
+				4	=> LDA_IMM,
+				5	=> x"78",	-- Denominator
+				6	=> STA_DIR,
+				7	=> x"82",
+				-- Clear values
+				8	=> LDA_IMM,
+				9 	=> x"00", 	-- Load 0 into A register
+				10	=> LDB_IMM,
+				11	=> x"00", 	-- Load 0 into B register
+				12	=> SUB_AB,	-- Clear remainder and carry flag
+				-- Initialize the remainder to 0
+				13	=> LDA_IMM,
+				14	=> x"00",
+				15	=> STA_DIR,
+				16	=> x"81",
+				-- Initialize counter to 8
+				17	=> LDA_IMM,
+				18	=> x"08",
+				19	=> STA_DIR,
+				20	=> x"83",
+				-- Rotate quotient
+				-- ROL value
+				21	=> LDA_DIR, -- divloop
+				22	=> x"80",
+				23	=> BCS,
+				24	=> x"1C",-- Jump to Carry = 1
+				25	=> SHL, -- Carry = 0
+				26	=> BRA,
+				27	=> x"1E", 
+				28	=> SHL, -- Carry = 1
+				29	=> INCA,
+				30	=> STA_DIR,
+				31	=> x"80",
+				-- ROL mod
+				32	=> LDA_DIR,
+				33	=> x"81",
+				34	=> BCS,
+				35	=> x"27",-- Jump to Carry = 1
+				36	=> SHL, -- Carry = 0
+				37	=> BRA,
+				38	=> x"29", 
+				39	=> SHL, -- Carry = 1
+				40	=> INCA,
+				41	=> STA_DIR,
+				42	=> x"81",
+				-- SBC
+				43 	=> LDA_DIR,
+				44	=> x"81",
+				45	=> LDB_DIR,
+				46	=> x"82",
+				47	=> SBC_AB, -- A = dividend (num) - divisor (denom)
+				-- Check C
+				48	=> BCC,
+				49	=> x"45", -- jump to ignore result (0) (num) < (denom)
+				50	=> STA_DIR,
+				51	=> x"81",
+				-- DEX (Carry is 1 so DECA, SEC)
+				52	=> LDA_DIR, -- ignore result (1)
+				53	=> x"83",
+				54	=> DECA,
+				55	=> STA_DIR,
+				56	=> x"83",
+				57	=> BEQ,
+				58	=> x"40", 	-- 0 path
+				59	=> LDA_IMM, -- 1
+				60	=> x"80",
+				61	=> SHL,
+				62	=> BRA,
+				63	=> x"15", -- jump to divloop
+				64	=> LDA_IMM, -- 0
+				65	=> x"80",
+				66	=> SHL,
+				67	=> BRA,
+				68	=> x"4C", -- jump to output
+				-- DEX (Carry is 0, so DECA)
+				69	=> LDA_DIR, -- ignore result (0)
+				70	=> x"83",
+				71	=> DECA,
+				72	=> STA_DIR,
+				73	=> x"83",
+				74	=> BNE,
+				75	=> x"15", -- jump to divloop
+				-- Output
+				76	=> LDA_DIR, -- value holds the answer to the division, but needs to be shifted left one more time
+				77	=> x"80",
+				78	=> BCS,
+				79	=> x"53",-- Jump to Carry = 1
+				80	=> SHL, -- Carry = 0
+				81	=> BRA,
+				82	=> x"55", 
+				83	=> SHL, -- Carry = 1
+				84	=> INCA,
+				85	=> STA_DIR, -- Storing value
+				86	=> x"80",
+				87	=> STA_DIR,
+				88	=> x"E0",
+				89	=> LDA_DIR, -- mod holds the remainder
+				90	=> x"81",
+				91	=> STA_DIR,
+				92	=> x"E1",
+				-- Halt
+				93	=> BRA,
+				94	=> x"5D",
+                              	others 	=> x"00");
 -- Signal Declaration
   signal EN : std_logic; 
 

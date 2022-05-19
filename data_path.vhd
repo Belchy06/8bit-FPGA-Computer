@@ -15,7 +15,7 @@ entity data_path is
              PC_Inc      : in  STD_LOGIC;             
              A_Load      : in  STD_LOGIC;
              B_Load      : in  STD_LOGIC;             
-             ALU_Sel     : in  STD_LOGIC_VECTOR (2 downto 0);             
+             ALU_Sel     : in  STD_LOGIC_VECTOR (3 downto 0);             
              CCR_Result  : out STD_LOGIC_VECTOR (3 downto 0);
              CCR_Load    : in  STD_LOGIC;             
              Bus1_Sel    : in  STD_LOGIC_VECTOR (1 downto 0);                          
@@ -28,7 +28,7 @@ architecture data_path_arch of data_path is
 
  component alu is
       port ( A, B        : in  STD_LOGIC_VECTOR (7 downto 0);
-             ALU_Sel     : in  STD_LOGIC_VECTOR (2 downto 0);
+             ALU_Sel     : in  STD_LOGIC_VECTOR (3 downto 0);
              Result      : out STD_LOGIC_VECTOR (7 downto 0);
              NZVC        : out STD_LOGIC_VECTOR (3 downto 0) );
  end component;

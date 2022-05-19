@@ -24,7 +24,7 @@ architecture cpu_arch of cpu is
              PC_Inc         : out  std_logic;
              A_load         : out  std_logic;
              B_load         : out  std_logic;
-             ALU_Sel        : out  std_logic_vector (2 downto 0);
+             ALU_Sel        : out  std_logic_vector (3 downto 0);
              CCR_Result     : in   std_logic_vector (3 downto 0);
              CCR_load       : out  std_logic;
              Bus2_Sel       : out  std_logic_vector (1 downto 0);
@@ -44,7 +44,7 @@ architecture cpu_arch of cpu is
              PC_Inc         : in   std_logic;
              A_load         : in   std_logic;
              B_load         : in   std_logic;
-             ALU_Sel        : in   std_logic_vector (2 downto 0);
+             ALU_Sel        : in   std_logic_vector (3 downto 0);
              CCR_Result     : out  std_logic_vector (3 downto 0);
              CCR_load       : in   std_logic;
              Bus2_Sel       : in   std_logic_vector (1 downto 0);
@@ -66,7 +66,7 @@ architecture cpu_arch of cpu is
      signal  PC_Inc    : STD_LOGIC;             
      signal  A_Load    : STD_LOGIC;
      signal  B_Load    : STD_LOGIC;             
-     signal  ALU_Sel   : STD_LOGIC_VECTOR (2 downto 0);             
+     signal  ALU_Sel   : STD_LOGIC_VECTOR (3 downto 0);             
      signal  CCR_Result: STD_LOGIC_VECTOR (3 downto 0);
      signal  CCR_Load  : STD_LOGIC;             
      signal  Bus1_Sel  : STD_LOGIC_VECTOR (1 downto 0);                          
@@ -87,7 +87,7 @@ architecture cpu_arch of cpu is
              PC_Inc     => PC_Inc,
              A_Load     => A_load,
              B_Load     => B_Load,
-             ALU_Sel    => ALU_Sel,
+             ALU_Sel(3 downto 0)    => ALU_Sel,
              CCR_Result => CCR_Result,
              CCR_Load   => CCR_Load,
              Bus1_Sel   => Bus1_Sel,

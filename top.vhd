@@ -148,8 +148,12 @@ architecture top_arch of top is
 		C0 : char_decoder port map (BIN_IN => port_out_01(3 downto 0), HEX_OUT => HEX0);
 		C1 : char_decoder port map (BIN_IN => port_out_01(7 downto 4), HEX_OUT => HEX1);
 		C2 : char_decoder port map (BIN_IN => port_out_02(3 downto 0), HEX_OUT => HEX2);
+		-- HEX3 shows lower 4 bits of B
 		C3 : char_decoder port map (BIN_IN => port_out_02(7 downto 4), HEX_OUT => HEX3);
-		C4 : char_decoder port map (BIN_IN => port_out_03(3 downto 0), HEX_OUT => HEX4);
+		-- HEX4 Show division symbol
+		-- HEX4 <= "0101101";
+		C4 : char_decoder port map (BIN_IN => port_out_02(3 downto 0), HEX_OUT => HEX4);
+		-- HEX5 shows lower 4 bits of A
 		C5 : char_decoder port map (BIN_IN => port_out_03(7 downto 4), HEX_OUT => HEX5);
 		
 		LEDR(7 downto 0) <= port_out_00;
