@@ -32,6 +32,7 @@ architecture control_unit_arch of control_unit is
   constant SUB_AB   : std_logic_vector (7 downto 0) := x"43";   -- A <= A - B
   constant AND_AB   : std_logic_vector (7 downto 0) := x"44";   -- A <= A and B
   constant OR_AB    : std_logic_vector (7 downto 0) := x"45";   -- A <= A or B
+  constant OR_AZ    : std_logic_vector (7 downto 0) := x"29";   -- A <= A or 0
   constant INCA     : std_logic_vector (7 downto 0) := x"46";   -- A <= A + 1
   constant INCB     : std_logic_vector (7 downto 0) := x"47";   -- B <= B + 1
   constant DECA     : std_logic_vector (7 downto 0) := x"48";   -- A <= A - 1
@@ -45,11 +46,13 @@ architecture control_unit_arch of control_unit is
   constant BVC      : std_logic_vector (7 downto 0) := x"26";   -- Branch if V=0  
   constant BCS      : std_logic_vector (7 downto 0) := x"27";   -- Branch if C=1
   constant BCC      : std_logic_vector (7 downto 0) := x"28";   -- Branch if C=0 
-  constant RLT	    : std_logic_vector (7 downto 0) := x"29";   -- Rotate A left
   constant RRT	    : std_logic_vector (7 downto 0) := x"30";   -- Rotate A right
   constant SHL	    : std_logic_vector (7 downto 0) := x"31";   -- Shift A left
   constant SHR	    : std_logic_vector (7 downto 0) := x"32";   -- Shift A right
   constant SBC_AB   : std_logic_vector (7 downto 0) := x"33";   -- Subtract with carry
+  constant SEC	    : std_logic_vector (7 downto 0) := x"34";	-- Set Carry
+  constant CLC	    : std_logic_vector (7 downto 0) := x"35";	-- Clear Carry
+  constant SHLI	    : std_logic_vector (7 downto 0) := x"36";   -- Shift left + increment
 
 
   type state_type is (S_FETCH_0,              -- Opcode fetch states
@@ -99,9 +102,10 @@ architecture control_unit_arch of control_unit is
                       S_INC_B_4,
                       S_DEC_A_4,
                       S_DEC_B_4,
-	      	      S_ROL_A_4,
+	      	      S_OR_AZ_4,
 		      S_ROR_A_4,
 		      S_SHL_A_4,
+		      S_SHLI_A_4,
 		      S_SHR_A_4,
 		      S_SBC_AB_4,
 
@@ -149,7 +153,11 @@ architecture control_unit_arch of control_unit is
                       S_BCC_4,                -- Branch Carry Clear
                       S_BCC_5,
                       S_BCC_6,
-                      S_BCC_7);
+                      S_BCC_7,
+
+		      S_SEC_4,			-- Set Carry
+
+		      S_CLC_4);			-- Clear Carry
 
   signal current_state, next_state : state_type;
 
@@ -207,7 +215,10 @@ architecture control_unit_arch of control_unit is
             next_state <= S_AND_AB_4;
 
           elsif (IR = OR_AB) then      -- Bitwise OR A and B
-            next_state <= S_OR_AB_4; 
+            next_state <= S_OR_AB_4;
+			
+		    elsif (IR = OR_AZ) then      -- Bitwise OR A and 0
+            next_state <= S_OR_AZ_4;	
 
           elsif (IR = INCA) then      -- Increment A
             next_state <= S_INC_A_4;  
@@ -221,14 +232,15 @@ architecture control_unit_arch of control_unit is
           elsif (IR = DECB) then      -- Decrement B
             next_state <= S_DEC_B_4; 
 
-          elsif (IR = RLT) then      -- ROtate Left A 
-            next_state <= S_ROL_A_4;
 
           elsif (IR = RRT) then      -- ROtate Right A
             next_state <= S_ROR_A_4;
 
           elsif (IR = SHL) then      -- SHift Left A
             next_state <= S_SHL_A_4;
+
+          elsif (IR = SHLI) then      -- SHift Left and Increment A
+            next_state <= S_SHLI_A_4;
 
           elsif (IR = SHR) then      -- SHift Right A
             next_state <= S_SHR_A_4;           
@@ -276,6 +288,12 @@ architecture control_unit_arch of control_unit is
             next_state <= S_BCC_7;
           elsif (IR = BCC and CCR_Result(0) = '0') then         -- BCC (We do jump) C=0
             next_state <= S_BCC_4; 
+
+	  elsif(IR = SEC) then
+	    next_state <= S_SEC_4;
+
+	  elsif(IR = CLC) then
+	    next_state <= S_CLC_4;
 
             
  	  else next_state <= S_FETCH_0; 
@@ -369,13 +387,16 @@ architecture control_unit_arch of control_unit is
       elsif (current_state = S_DEC_B_4) then     -- Path for DECB instruction
 	next_state <= S_FETCH_0;
 
-      elsif (current_state = S_ROL_A_4) then     -- Path for ROL instruction
+      elsif (current_state = S_OR_AZ_4) then     -- Path for OR_AZ instruction
 	next_state <= S_FETCH_0;
 
       elsif (current_state = S_ROR_A_4) then     -- Path for ROR instruction
 	next_state <= S_FETCH_0;
 
       elsif (current_state = S_SHL_A_4) then     -- Path for SHL instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_SHLI_A_4) then     -- Path for SHLI instruction
 	next_state <= S_FETCH_0;
 
       elsif (current_state = S_SHR_A_4) then     -- Path for SHR instruction
@@ -443,6 +464,12 @@ architecture control_unit_arch of control_unit is
 	next_state <= S_BCC_6;      elsif (current_state = S_BCC_6) then     
 	next_state <= S_FETCH_0;
       elsif (current_state = S_BCC_7) then     -- Path for BCC instruction (We don't jump)
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_SEC_4) then	-- Path for SEC instruction
+	next_state <= S_FETCH_0;
+
+      elsif (current_state = S_CLC_4) then	-- Path for CLC instruction
 	next_state <= S_FETCH_0;
       end if;
     end process;
@@ -1010,9 +1037,9 @@ architecture control_unit_arch of control_unit is
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
 
       --------------------------------------------------------------------------------------------------
-      -- ROL
+      -- OR_AZ
       -------------------------------------------------------------------------------------------------- 
-        when S_ROL_A_4 =>  -- Put output from ALU onto bus2 and load into A
+        when S_OR_AZ_4 =>  -- Put output from ALU onto bus2 and load into A
            IR_Load  <= '0';         
            MAR_Load <= '0';                       
            PC_Load  <= '0';         
@@ -1050,6 +1077,51 @@ architecture control_unit_arch of control_unit is
            A_Load   <= '1';            
            B_Load   <= '0';                 
            ALU_Sel  <= "1010";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- SHLI
+      -------------------------------------------------------------------------------------------------- 
+        when S_SHLI_A_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1111";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- SEC
+      -------------------------------------------------------------------------------------------------- 
+        when S_SEC_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1101";                 
+           CCR_Load <= '1';                      
+           Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
+           Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 
+
+      --------------------------------------------------------------------------------------------------
+      -- CLC
+      -------------------------------------------------------------------------------------------------- 
+        when S_CLC_4 =>  -- Put output from ALU onto bus2 and load into A
+           IR_Load  <= '0';         
+           MAR_Load <= '0';                       
+           PC_Load  <= '0';         
+           PC_Inc   <= '0';                     
+           A_Load   <= '1';            
+           B_Load   <= '0';                 
+           ALU_Sel  <= "1110";                 
            CCR_Load <= '1';                      
            Bus1_Sel <= "01"; -- "00"=PC,  "01"=A,    "10"=B
            Bus2_Sel <= "00"; -- "00"=ALU, "01"=Bus1, "10"=from_memory           write    <= '0'; 

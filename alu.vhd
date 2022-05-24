@@ -131,21 +131,14 @@ architecture alu_arch of alu is
               NZVC(1) <= '0';            
            end if;
 
-      elsif (ALU_Sel = "1000") then -- ROL
-	-- Shifting
-	Sum_uns := unsigned(B & '0');
-	Sum_uns(0) := Sum_uns(8);
-	Result <= std_logic_vector(Sum_uns(7 downto 0));
-
-	-- Zero flag
-        if (Sum_uns(7 downto 0) = x"00") then
-           NZVC(2) <= '1';
-        else
-           NZVC(2) <= '0';            
-        end if;
-
-	-- Carry flag
-        NZVC(0) <= Sum_uns(8);
+      elsif (ALU_Sel = "1000") then -- OR_AZ
+		Result <= B;
+		-- Zero flag
+		if (unsigned(B) = x"00") then
+			NZVC(2) <= '1';
+		else
+			NZVC(2) <= '0';            
+		end if;
 
       elsif (ALU_Sel = "1001") then -- ROR
 	-- Shifting
@@ -207,6 +200,27 @@ architecture alu_arch of alu is
 
            -- Carry flag
            NZVC(0) <= Sum_uns(8);
+
+      elsif(ALU_Sel = "1101") then -- Set Carry
+	NZVC(0) <= '1';
+
+     elsif(ALU_Sel = "1110") then -- Clear Carry
+	NZVC(0) <= '0';
+
+     elsif(ALU_Sel = "1111") then -- Shift left + inc
+	-- Shifting
+	Sum_uns := unsigned(B & '1');
+	Result <= std_logic_vector(Sum_uns(7 downto 0));
+
+	-- Carry flag
+        NZVC(0) <= Sum_uns(8);
+
+	-- Zero flag
+        if (Sum_uns(7 downto 0) = x"00") then
+           NZVC(2) <= '1';
+        else
+           NZVC(2) <= '0';            
+        end if;
 
 
       else  
